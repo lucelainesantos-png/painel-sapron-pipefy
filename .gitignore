@@ -1,6 +1,7 @@
 # credenciais — nunca commitar
 .pipefy_token
 .supabase_service_key
+.supabase_refresh_secret
 config.py
 
 # outputs

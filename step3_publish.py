@@ -1,9 +1,6 @@
 """
-Passo 3 (nova versão): publica cards + activities no Supabase.
-
-Substitui o antigo step3_build.py, que gerava HTML local.
-O painel Web agora lê tudo do Supabase; checks/OBS ficam lá também
-e sincronizam em tempo real entre os usuários @seazone.com.br.
+Passo 3 (RPC): publica cards + activities no Supabase via funções RPC
+protegidas por segredo. Não precisa de service_role key.
 """
 import json, sys, urllib.request, urllib.error
 from collections import defaultdict
@@ -11,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import BASE, SUPABASE_URL, SUPABASE_SERVICE_KEY
+from config import BASE, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_REFRESH_SECRET
 
 CARDS_JSON = BASE / 'cards.json'
 SAPRON_JSON = BASE / 'sapron_result.json'
@@ -58,7 +55,7 @@ def build_rows():
                 'card_id': card_id, 'codigo': codigo, 'property_id': pid,
                 'responsavel': responsavel, 'data_agendada': data_ag, 'fase': fase,
                 'categoria': 'sem_activity', 'acao': 'Sem chamado no Sapron',
-                'quem': '', 'quando': '', 'quando_iso': '', 'ultima_msg_ts': 0,
+                'quem': '', 'quando': '', 'ultima_msg_ts': 0,
                 'abertos': 0, 'total': 0,
             })
             continue
@@ -84,7 +81,6 @@ def build_rows():
             'categoria': cat, 'acao': acao,
             'quem': (a0.get('ultimo_autor_nome') or '').strip(),
             'quando': fmt_dt(dt0),
-            'quando_iso': dt0.isoformat() if dt0 else '',
             'ultima_msg_ts': ts_ms(dt0),
             'abertos': sum(1 for a in card_acts if (a.get('activity_status') or '').lower()
                            in ('aberto','andamento','aguardando')),
@@ -99,9 +95,7 @@ def build_rows():
                      else 'sem_msg')
             acts.append({
                 'activity_id': str(a.get('activity_id','')),
-                'card_id': card_id,
-                'codigo': codigo,
-                'property_id': pid,
+                'card_id': card_id, 'codigo': codigo, 'property_id': pid,
                 'titulo': a.get('activity_title','') or '',
                 'status': a.get('activity_status','') or '',
                 'ultima': fmt_dt(dta),
@@ -111,102 +105,57 @@ def build_rows():
                 'cat': cat_a,
             })
 
-    # ordena e stampa order_idx
     ordem = {'sem_activity':0,'nossa_vez':1,'sem_msg':2,'esperando':3}
-    rows.sort(key=lambda r: (ordem.get(r['categoria'],9), r['quando_iso'] or 'ZZ', r['codigo']))
+    rows.sort(key=lambda r: (ordem.get(r['categoria'],9), (r.get('quando') or 'ZZ'), r['codigo']))
     for i, r in enumerate(rows):
         r['order_idx'] = i
-        # quando_iso não vai pro banco (não temos coluna)
-        r.pop('quando_iso', None)
-
     return rows, acts
 
 
-def http_json(method, path, body=None, extra_headers=None):
-    url = f'{SUPABASE_URL}/rest/v1/{path}'
-    data = json.dumps(body).encode('utf-8') if body is not None else None
-    headers = {
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
-    }
-    if extra_headers:
-        headers.update(extra_headers)
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+def rpc(fn, payload):
+    url = f'{SUPABASE_URL}/rest/v1/rpc/{fn}'
+    body = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=body, method='POST',
+        headers={
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': f'Bearer {SUPABASE_ANON_KEY}',
+            'Content-Type': 'application/json',
+        })
     try:
-        with urllib.request.urlopen(req, timeout=90) as r:
-            return r.status, r.read().decode('utf-8', errors='replace')
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f'HTTP {e.code} em {method} {path}: {e.read().decode("utf-8", errors="replace")}') from e
+        raise RuntimeError(f'RPC {fn} HTTP {e.code}: {e.read().decode("utf-8", errors="replace")}')
 
 
-def upsert_batch(table, rows, on_conflict):
-    if not rows: return
-    # PostgREST upsert: POST /table com Prefer resolution=merge-duplicates + on_conflict via query
-    path = f'{table}?on_conflict={on_conflict}'
-    http_json('POST', path, rows, extra_headers={'Prefer': 'resolution=merge-duplicates,return=minimal'})
-
-
-def delete_stale(table, keep_ids, key_col):
-    # Deleta linhas cujo key não está em keep_ids
-    # PostgREST: DELETE /table?key=not.in.(a,b,c)
-    if not keep_ids:
-        # esvazia tudo
-        http_json('DELETE', f'{table}?{key_col}=neq.__NEVER__')
-        return
-    # PostgREST tem limite de URL; se muitos ids, faz em blocos
-    keep_list = list(keep_ids)
-    CHUNK = 300
-    for i in range(0, len(keep_list), CHUNK):
-        chunk = keep_list[i:i+CHUNK]
-        # Estratégia: em vez de not.in de todos, deleta em batches por chunk NÃO listado é inviável.
-        # Melhor: uma passada só. Se muito grande, fallback: buscar todos, comparar, deletar por id.
-        if i == 0 and len(keep_list) <= CHUNK:
-            expr = 'not.in.(' + ','.join(f'"{k}"' for k in chunk) + ')'
-            http_json('DELETE', f'{table}?{key_col}={expr}')
-            return
-    # muitos ids: usa a via alternativa
-    _, body = http_json('GET', f'{table}?select={key_col}&limit=100000',
-                        extra_headers={'Prefer': ''})
-    existing = {row[key_col] for row in json.loads(body)}
-    to_delete = list(existing - set(keep_ids))
-    for i in range(0, len(to_delete), CHUNK):
-        chunk = to_delete[i:i+CHUNK]
-        expr = 'in.(' + ','.join(f'"{k}"' for k in chunk) + ')'
-        http_json('DELETE', f'{table}?{key_col}={expr}')
-
-
-def stamp_meta():
-    http_json('PATCH', 'pipefy_meta?id=eq.1', {'last_refresh': datetime.now().isoformat()})
+def chunked(seq, n):
+    for i in range(0, len(seq), n):
+        yield seq[i:i+n]
 
 
 def main():
     rows, acts = build_rows()
     print(f'Preparado: {len(rows)} cards, {len(acts)} activities')
 
-    # 1) upsert cards
-    CHUNK = 200
-    for i in range(0, len(rows), CHUNK):
-        upsert_batch('pipefy_cards', rows[i:i+CHUNK], on_conflict='card_id')
-    print(f'✓ pipefy_cards upsert')
+    total = 0
+    for batch in chunked(rows, 200):
+        total += rpc('pipefy_upsert_cards', {'secret': SUPABASE_REFRESH_SECRET, 'rows': batch})
+    print(f'  cards upsertados: {total}')
 
-    # 2) delete cards sumidos
-    keep_cards = {r['card_id'] for r in rows}
-    delete_stale('pipefy_cards', keep_cards, 'card_id')
-    print(f'✓ pipefy_cards clean-up')
+    total_a = 0
+    for batch in chunked(acts, 300):
+        total_a += rpc('pipefy_upsert_activities', {'secret': SUPABASE_REFRESH_SECRET, 'rows': batch})
+    print(f'  activities upsertadas: {total_a}')
 
-    # 3) upsert activities
-    if acts:
-        for i in range(0, len(acts), CHUNK):
-            upsert_batch('pipefy_activities', acts[i:i+CHUNK], on_conflict='activity_id')
-    print(f'✓ pipefy_activities upsert')
+    keep_cards = [r['card_id'] for r in rows]
+    keep_acts = [a['activity_id'] for a in acts if a['activity_id']]
+    prune = rpc('pipefy_prune', {
+        'secret': SUPABASE_REFRESH_SECRET,
+        'keep_cards': keep_cards,
+        'keep_activities': keep_acts,
+    })
+    print(f'  prune: {prune}')
 
-    keep_acts = {a['activity_id'] for a in acts if a['activity_id']}
-    delete_stale('pipefy_activities', keep_acts, 'activity_id')
-    print(f'✓ pipefy_activities clean-up')
-
-    stamp_meta()
     from collections import Counter
     c = Counter(r['categoria'] for r in rows)
     print(f'OK: {len(rows)} cards | {len(acts)} chamados | {dict(c)}')
