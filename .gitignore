@@ -1,0 +1,25 @@
+# credenciais — nunca commitar
+.pipefy_token
+.supabase_service_key
+config.py
+
+# outputs
+refresh.log
+dados.json
+cards.json
+cards_extracted.csv
+sapron_ids.txt
+sapron_result.json
+cards_page_*.json
+codigos.txt
+phase_sample.json
+painel.html
+dados_novo.json
+planilha_final.xlsx
+gerar_planilha.py
+fetch_cards.sh
+extract_cards.py
+
+# python
+__pycache__/
+*.pyc

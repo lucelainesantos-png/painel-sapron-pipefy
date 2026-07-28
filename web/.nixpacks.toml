@@ -1,0 +1,6 @@
+# Static site — só serve os arquivos web/*
+[phases.setup]
+nixPkgs = ["caddy"]
+
+[start]
+cmd = 'caddy file-server --root . --listen :3000'

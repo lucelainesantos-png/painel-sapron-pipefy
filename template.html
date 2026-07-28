@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Cruzamento Sapron × Pipefy</title>
+<style>
+:root{
+  --navy:#1F3864; --navy2:#2E5395; --bg:#F7F9FC; --card:#fff; --border:#D9E1F2;
+  --txt:#1F3864; --mute:#7F7F7F;
+  --nossa:#E2EFDA; --esperando:#FCE4D6; --grey:#EDEDED; --red:#F8CBAD;
+  --nossa-dk:#548235; --esperando-dk:#C65911; --red-dk:#C00000;
+}
+*{box-sizing:border-box}
+body{font-family:'Segoe UI',Calibri,sans-serif; margin:0; background:var(--bg); color:var(--txt);}
+header{padding:24px 32px 8px 32px}
+h1{margin:0; font-size:26px; color:var(--navy);}
+.sub{color:var(--mute); font-size:13px; margin-top:4px}
+.kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:12px; padding:16px 32px}
+.kpi{background:var(--card); border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.kpi .lbl{background:var(--navy2); color:#fff; font-size:11px; font-weight:700; letter-spacing:.5px; padding:6px 10px; text-align:center;}
+.kpi .val{font-size:28px; font-weight:700; padding:14px 10px; text-align:center; color:var(--navy)}
+.kpi.k2 .lbl{background:var(--nossa-dk)}
+.kpi.k3 .lbl{background:var(--esperando-dk)}
+.kpi.k4 .lbl{background:var(--nossa-dk)}
+.kpi.k5 .lbl{background:#ED7D31}
+.progress{margin:0 32px 12px 32px; background:#DDEBF7; padding:10px; text-align:center; font-weight:700; color:var(--navy); border-radius:6px}
+.progress-bar{height:6px; background:#B4C7E7; border-radius:3px; overflow:hidden; margin-top:6px}
+.progress-bar > div{height:100%; background:var(--nossa-dk); transition:width .3s}
+.toolbar{padding:0 32px 12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.toolbar input[type=search], .toolbar select{padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; background:#fff}
+.toolbar input[type=search]{width:260px}
+.toolbar select{min-width:200px}
+.toolbar .chip{padding:6px 12px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; background:#fff; border:1px solid var(--border); user-select:none}
+.toolbar .chip.active{background:var(--navy); color:#fff; border-color:var(--navy)}
+.toolbar .spacer{flex:1}
+.toolbar button{padding:8px 14px; border:1px solid var(--border); background:#fff; border-radius:6px; cursor:pointer; font-size:13px}
+.toolbar button:hover{background:#F0F3F7}
+.tbl-wrap{margin:0 32px 32px; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06)}
+table{width:100%; border-collapse:collapse; font-size:13px}
+thead th{background:var(--navy); color:#fff; padding:10px 8px; text-align:left; position:sticky; top:0; z-index:2}
+thead th.c{text-align:center}
+tbody td{padding:8px; border-bottom:1px solid var(--border); vertical-align:middle}
+tbody td.c{text-align:center}
+tbody tr.nossa_vez{background:var(--nossa)}
+tbody tr.esperando{background:var(--esperando)}
+tbody tr.sem_activity{background:var(--red)}
+tbody tr.sem_msg{background:var(--grey)}
+tbody tr.done{background:#FFF2CC !important; color:#7F6000; text-decoration:line-through}
+tbody tr.done .codigo{color:#7F6000}
+.codigo{font-weight:700; color:var(--navy)}
+.badge-abertos{display:inline-block; min-width:22px; padding:2px 8px; border-radius:12px; background:#fff; font-weight:700; font-size:12px; color:var(--txt)}
+.badge-abertos.hot{background:var(--red-dk); color:#fff}
+.fase-badge{display:inline-block; padding:2px 8px; border-radius:10px; background:#DDEBF7; color:var(--navy); font-size:11px; font-weight:600; white-space:nowrap}
+input.chk{width:18px; height:18px; cursor:pointer}
+textarea.obs{width:100%; min-width:160px; border:1px solid var(--border); border-radius:4px; padding:4px 6px; font-family:inherit; font-size:12px; resize:vertical; min-height:26px}
+.tab-btns{padding:0 32px; margin-bottom:8px}
+.tab-btns button{padding:8px 16px; border:none; background:transparent; font-size:14px; font-weight:600; color:var(--mute); cursor:pointer; border-bottom:3px solid transparent}
+.tab-btns button.active{color:var(--navy); border-bottom-color:var(--navy)}
+.hidden{display:none}
+.details-table td{font-size:12px}
+.export-menu{position:relative; display:inline-block}
+.export-menu .menu{position:absolute; right:0; top:100%; background:#fff; border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.1); min-width:220px; display:none; z-index:10}
+.export-menu.open .menu{display:block}
+.export-menu .menu button{display:block; width:100%; text-align:left; padding:10px 14px; border:none; background:none; cursor:pointer; font-size:13px}
+.export-menu .menu button:hover{background:#F0F3F7}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cruzamento Sapron × Pipefy — PIPE 1 Implantação/Mãe</h1>
+  <div class="sub" id="sub"></div>
+</header>
+<div class="tab-btns">
+  <button data-tab="painel" class="active">Painel</button>
+  <button data-tab="detalhes">Detalhes dos chamados</button>
+</div>
+<section id="tab-painel">
+<div class="kpis">
+  <div class="kpi"><div class="lbl">CARDS TOTAL</div><div class="val" id="k-total">–</div></div>
+  <div class="kpi k2"><div class="lbl">VERIFICADOS</div><div class="val" id="k-ok">–</div></div>
+  <div class="kpi k3"><div class="lbl">PENDENTES</div><div class="val" id="k-pend">–</div></div>
+  <div class="kpi k4"><div class="lbl">NOSSA VEZ</div><div class="val" id="k-nossa">–</div></div>
+  <div class="kpi k5"><div class="lbl">ESPERANDO FRANQUIA</div><div class="val" id="k-esp">–</div></div>
+</div>
+<div class="progress">
+  <div id="prog-label">–</div>
+  <div class="progress-bar"><div id="prog-bar" style="width:0%"></div></div>
+</div>
+<div class="toolbar">
+  <input type="search" id="q" placeholder="Buscar código, responsável, ação...">
+  <select id="filtro-fase"><option value="">Todas as fases</option></select>
+  <span class="chip active" data-filter="todos">Todos</span>
+  <span class="chip" data-filter="pendentes">Só pendentes</span>
+  <span class="chip" data-filter="sem_activity">🔴 Sem chamado</span>
+  <span class="chip" data-filter="nossa_vez">🟢 Nossa vez</span>
+  <span class="chip" data-filter="sem_msg">⚪ Sem mensagens</span>
+  <span class="chip" data-filter="esperando">🟠 Esperando franquia</span>
+  <span class="spacer"></span>
+  <div class="export-menu" id="expmenu">
+    <button id="btn-export">Exportar / Backup ▾</button>
+    <div class="menu">
+      <button data-act="csv">Baixar CSV (Excel/Sheets)</button>
+      <button data-act="backup">Backup do progresso (JSON)</button>
+      <button data-act="restore">Restaurar progresso (JSON)</button>
+      <button data-act="clear" style="color:#c00">Limpar progresso</button>
+    </div>
+  </div>
+</div>
+<div class="tbl-wrap">
+<table id="tbl">
+  <thead>
+    <tr>
+      <th class="c">#</th>
+      <th class="c">✔</th>
+      <th>Código</th>
+      <th>Fase</th>
+      <th>Ação</th>
+      <th>Última resposta</th>
+      <th>Quando</th>
+      <th class="c">Abertos</th>
+      <th>Responsável Pipefy</th>
+      <th>Data agendada</th>
+      <th>OBS</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+</div>
+</section>
+<section id="tab-detalhes" class="hidden">
+<div class="toolbar">
+  <input type="search" id="qd" placeholder="Buscar em chamados...">
+</div>
+<div class="tbl-wrap">
+<table class="details-table">
+  <thead>
+    <tr>
+      <th>Código</th><th>Fase</th><th>Activity ID</th><th>Título</th><th>Status</th>
+      <th>Última mensagem</th><th>Autor</th><th>E-mail</th><th>Categoria</th>
+    </tr>
+  </thead>
+  <tbody id="tbody-det"></tbody>
+</table>
+</div>
+</section>
+<script id="dados-json" type="application/json">__DADOS__</script>
+<script>
+const DADOS = JSON.parse(document.getElementById('dados-json').textContent);
+const STORAGE = 'sapron_pipefy_v2';
+function loadState(){ try{ return JSON.parse(localStorage.getItem(STORAGE) || '{}'); }catch(e){ return {}; } }
+function saveState(s){ localStorage.setItem(STORAGE, JSON.stringify(s)); }
+let state = loadState();
+state.ok    = state.ok    || {};
+state.ok_ts = state.ok_ts || {};
+state.obs   = state.obs   || {};
+
+// Migração v1 -> v2 (aproveita OK/OBS antigos; sem timestamp => próxima msg desmarca)
+try{
+  const v1 = JSON.parse(localStorage.getItem('sapron_pipefy_v1') || 'null');
+  if(v1 && !Object.keys(state.ok).length){
+    state.ok = v1.ok || {};
+    state.obs = v1.obs || {};
+    saveState(state);
+  }
+}catch(e){}
+
+// Auto-desmarcar: se chegou mensagem mais nova que o momento do OK
+let autoUnchecked = 0;
+for(const r of DADOS.rows){
+  const key = r.card_id || r.codigo;
+  if(state.ok[key]){
+    const marcadoEm = state.ok_ts[key] || 0;
+    if((r.ultima_msg_ts || 0) > marcadoEm){
+      delete state.ok[key];
+      delete state.ok_ts[key];
+      autoUnchecked++;
+    }
+  }
+}
+if(autoUnchecked > 0) saveState(state);
+
+let filtro = 'todos';
+let filtroFase = '';
+let busca = '';
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+  });
+}
+
+function render(){
+  const rows = DADOS.rows;
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  let visible = 0, totalOK = 0, totalPend = 0, nossa = 0, esp = 0;
+  for(let i=0; i<rows.length; i++){
+    const r = rows[i];
+    const key = r.card_id || r.codigo;
+    const isOK = !!state.ok[key];
+    if(isOK) totalOK++; else totalPend++;
+    if(!isOK && r.categoria === 'nossa_vez') nossa++;
+    if(!isOK && r.categoria === 'esperando') esp++;
+    let show = true;
+    if(filtro === 'pendentes' && isOK) show = false;
+    if(['sem_activity','nossa_vez','sem_msg','esperando'].indexOf(filtro) >= 0 && r.categoria !== filtro) show = false;
+    if(filtroFase && r.fase !== filtroFase) show = false;
+    if(busca){
+      const hay = (r.codigo+' '+r.acao+' '+r.quem+' '+r.responsavel+' '+r.fase+' '+(state.obs[key]||'')).toLowerCase();
+      if(hay.indexOf(busca) < 0) show = false;
+    }
+    if(!show) continue;
+    visible++;
+    const tr = document.createElement('tr');
+    tr.className = (isOK ? 'done' : r.categoria);
+    tr.innerHTML =
+      '<td class="c">'+visible+'</td>'+
+      '<td class="c"><input type="checkbox" class="chk" data-k="'+escapeHtml(key)+'" '+(isOK?'checked':'')+'></td>'+
+      '<td><span class="codigo">'+escapeHtml(r.codigo)+'</span></td>'+
+      '<td><span class="fase-badge">'+escapeHtml(r.fase||'')+'</span></td>'+
+      '<td>'+escapeHtml(r.acao)+'</td>'+
+      '<td>'+escapeHtml(r.quem)+'</td>'+
+      '<td>'+escapeHtml(r.quando)+'</td>'+
+      '<td class="c"><span class="badge-abertos '+(r.abertos>0?'hot':'')+'">'+r.abertos+'</span></td>'+
+      '<td>'+escapeHtml(r.responsavel)+'</td>'+
+      '<td>'+escapeHtml(r.data_ag)+'</td>'+
+      '<td><textarea class="obs" data-k="'+escapeHtml(key)+'" rows="1" placeholder="anotação...">'+escapeHtml(state.obs[key]||'')+'</textarea></td>';
+    tbody.appendChild(tr);
+  }
+  const N = rows.length;
+  document.getElementById('k-total').textContent = N;
+  document.getElementById('k-ok').textContent = totalOK;
+  document.getElementById('k-pend').textContent = totalPend;
+  document.getElementById('k-nossa').textContent = nossa;
+  document.getElementById('k-esp').textContent = esp;
+  const pct = N ? (totalOK/N*100) : 0;
+  const alertMsg = autoUnchecked > 0 ? ' · ⚠ '+autoUnchecked+' desmarcado(s) por nova resposta' : '';
+  document.getElementById('prog-label').textContent =
+    'Progresso: '+pct.toFixed(1)+'% concluído · '+totalPend+' pendente(s) · '+visible+' visível(is) no filtro' + alertMsg;
+  document.getElementById('prog-bar').style.width = pct+'%';
+}
+
+function renderDetalhes(){
+  const q = (document.getElementById('qd').value || '').toLowerCase();
+  const tb = document.getElementById('tbody-det');
+  tb.innerHTML = '';
+  for(const d of DADOS.detalhes){
+    const hay = (d.codigo+' '+d.titulo+' '+d.autor+' '+d.email+' '+d.status+' '+(d.fase||'')).toLowerCase();
+    if(q && hay.indexOf(q) < 0) continue;
+    const tr = document.createElement('tr');
+    tr.className = d.cat;
+    tr.innerHTML =
+      '<td><span class="codigo">'+escapeHtml(d.codigo)+'</span></td>'+
+      '<td><span class="fase-badge">'+escapeHtml(d.fase||'')+'</span></td>'+
+      '<td>'+escapeHtml(d.activity_id)+'</td>'+
+      '<td>'+escapeHtml(d.titulo)+'</td>'+
+      '<td>'+escapeHtml(d.status)+'</td>'+
+      '<td>'+escapeHtml(d.ultima)+'</td>'+
+      '<td>'+escapeHtml(d.autor)+'</td>'+
+      '<td>'+escapeHtml(d.email)+'</td>'+
+      '<td>'+escapeHtml(d.cat)+'</td>';
+    tb.appendChild(tr);
+  }
+}
+
+document.addEventListener('change', function(e){
+  if(e.target.classList.contains('chk')){
+    const k = e.target.dataset.k;
+    if(e.target.checked){
+      state.ok[k] = 1;
+      state.ok_ts[k] = Date.now();
+    } else {
+      delete state.ok[k]; delete state.ok_ts[k];
+    }
+    saveState(state); render();
+  }
+});
+document.addEventListener('input', function(e){
+  if(e.target.classList.contains('obs')){
+    const k = e.target.dataset.k;
+    state.obs[k] = e.target.value;
+    saveState(state);
+  }
+});
+document.getElementById('q').addEventListener('input', function(e){
+  busca = e.target.value.toLowerCase(); render();
+});
+document.getElementById('qd').addEventListener('input', renderDetalhes);
+document.querySelectorAll('.chip').forEach(function(el){
+  el.addEventListener('click', function(){
+    document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('active'); });
+    el.classList.add('active');
+    filtro = el.dataset.filter;
+    render();
+  });
+});
+document.querySelectorAll('.tab-btns button').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.tab-btns button').forEach(function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    const tab = b.dataset.tab;
+    document.getElementById('tab-painel').classList.toggle('hidden', tab!=='painel');
+    document.getElementById('tab-detalhes').classList.toggle('hidden', tab!=='detalhes');
+    if(tab==='detalhes') renderDetalhes();
+  });
+});
+(function(){
+  const sel = document.getElementById('filtro-fase');
+  const fases = Array.from(new Set(DADOS.rows.map(function(r){return r.fase;}).filter(Boolean))).sort();
+  fases.forEach(function(f){
+    const o = document.createElement('option');
+    o.value = f; o.textContent = f;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', function(){ filtroFase = sel.value; render(); });
+})();
+document.getElementById('btn-export').addEventListener('click', function(e){
+  e.stopPropagation();
+  document.getElementById('expmenu').classList.toggle('open');
+});
+document.addEventListener('click', function(){
+  document.getElementById('expmenu').classList.remove('open');
+});
+document.querySelectorAll('#expmenu .menu button').forEach(function(b){
+  b.addEventListener('click', function(){
+    const act = b.dataset.act;
+    if(act === 'csv') exportCSV();
+    if(act === 'backup') exportProgress();
+    if(act === 'restore') importProgress();
+    if(act === 'clear') clearProgress();
+    document.getElementById('expmenu').classList.remove('open');
+  });
+});
+function csvEsc(v){ v = String(v == null ? '' : v); return /[;"\r\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function download(name, content, type){
+  const b = new Blob([content], {type: type});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b); a.download = name; a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+}
+function exportCSV(){
+  const cols = ['#','Verificado','Codigo','Fase','Acao','Ultima resposta','Quando','Abertos','Responsavel','Data agendada','OBS','card_id','property_id','categoria'];
+  const lines = [cols.join(';')];
+  DADOS.rows.forEach(function(r,i){
+    const key = r.card_id || r.codigo;
+    const cells = [
+      i+1, state.ok[key]?'OK':'',
+      r.codigo, r.fase||'', r.acao, r.quem, r.quando, r.abertos, r.responsavel, r.data_ag,
+      state.obs[key]||'', r.card_id, r.property_id, r.categoria
+    ];
+    lines.push(cells.map(csvEsc).join(';'));
+  });
+  download('cruzamento_sapron_pipefy.csv', '﻿'+lines.join('\r\n'), 'text/csv');
+}
+function exportProgress(){
+  download('progresso_sapron_'+new Date().toISOString().slice(0,10)+'.json', JSON.stringify(state,null,2), 'application/json');
+}
+function importProgress(){
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='.json';
+  inp.onchange = function(){
+    const f = inp.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = function(){
+      try{
+        const s = JSON.parse(r.result);
+        state = {ok: s.ok || {}, ok_ts: s.ok_ts || {}, obs: s.obs || {}};
+        saveState(state); render();
+        alert('Progresso restaurado.');
+      }catch(e){ alert('JSON inválido.'); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+function clearProgress(){
+  if(confirm('Zerar todos os checks e observações?')){
+    state = {ok:{}, ok_ts:{}, obs:{}}; saveState(state); render();
+  }
+}
+document.getElementById('sub').textContent =
+  'Atualizado em ' + new Date(DADOS.gerado).toLocaleString('pt-BR') +
+  ' · ' + DADOS.rows.length + ' cards · ' + DADOS.detalhes.length +
+  ' chamados · progresso salvo neste navegador';
+render();
+</script>
+</body>
+</html>

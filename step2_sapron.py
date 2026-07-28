@@ -1,0 +1,115 @@
+"""
+Passo 2: consulta o Sapron MCP via mcp-remote (subprocess de npx).
+
+Fala JSON-RPC sobre stdin/stdout do npx. Sem depender do Claude estar aberto.
+
+Requisitos: Node.js instalado (traz o npx).
+"""
+import json, os, subprocess, sys, time
+from pathlib import Path
+
+BASE = Path(__file__).parent
+SAPRON_URL = 'https://mcp.sapron.com.br/mcp'
+CF_ID = '3b5850913f6773cc3a67b87dd1061d6c.access'
+CF_SECRET = 'ac229ad8c0024eb49b722016cc4f3fd2425576cdbc2e43ea3d9be230ef5b1060'
+
+def build_sql(ids):
+    ids_sql = ','.join(str(i) for i in ids)
+    return f"""WITH last_msg AS (
+  SELECT DISTINCT ON (m.activity_id)
+         m.activity_id, m.author_id, m.created_at AS ultima_msg_at
+  FROM franchise_communication_activitymessage m
+  JOIN franchise_communication_activity a ON a.id = m.activity_id
+  WHERE a.property_id IN ({ids_sql}) AND a.category = 'implantacao'
+  ORDER BY m.activity_id, m.created_at DESC
+)
+SELECT a.id AS activity_id,
+       a.property_id,
+       a.title AS activity_title,
+       a.status AS activity_status,
+       lm.ultima_msg_at,
+       u.email AS ultimo_autor_email,
+       u.first_name || ' ' || u.last_name AS ultimo_autor_nome
+FROM franchise_communication_activity a
+LEFT JOIN last_msg lm ON lm.activity_id = a.id
+LEFT JOIN account_user u ON u.id = lm.author_id
+WHERE a.property_id IN ({ids_sql}) AND a.category = 'implantacao'
+ORDER BY a.property_id, a.id;"""
+
+
+def npx_command():
+    # Windows: npx.cmd; usa shell=True pra achar
+    if os.name == 'nt':
+        return ['npx.cmd', '-y', 'mcp-remote', SAPRON_URL,
+                '--header', f'CF-Access-Client-Id:{CF_ID}',
+                '--header', f'CF-Access-Client-Secret:{CF_SECRET}',
+                '--transport', 'http-only']
+    return ['npx', '-y', 'mcp-remote', SAPRON_URL,
+            '--header', f'CF-Access-Client-Id:{CF_ID}',
+            '--header', f'CF-Access-Client-Secret:{CF_SECRET}',
+            '--transport', 'http-only']
+
+
+def call_sapron(sql, timeout=180):
+    proc = subprocess.Popen(
+        npx_command(),
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding='utf-8', bufsize=1,
+    )
+    def send(msg):
+        proc.stdin.write(json.dumps(msg) + '\n')
+        proc.stdin.flush()
+
+    def recv(expected_id, deadline):
+        while time.time() < deadline:
+            line = proc.stdout.readline()
+            if not line:
+                if proc.poll() is not None:
+                    err = proc.stderr.read()
+                    raise RuntimeError(f'mcp-remote encerrou: {err}')
+                time.sleep(0.05); continue
+            line = line.strip()
+            if not line: continue
+            try:
+                m = json.loads(line)
+            except Exception:
+                continue
+            if m.get('id') == expected_id:
+                return m
+        raise TimeoutError(f'timeout esperando id={expected_id}')
+
+    deadline = time.time() + timeout
+    try:
+        send({'jsonrpc':'2.0','id':1,'method':'initialize',
+              'params':{'protocolVersion':'2024-11-05',
+                        'capabilities':{},
+                        'clientInfo':{'name':'painel','version':'1'}}})
+        recv(1, deadline)
+        send({'jsonrpc':'2.0','method':'notifications/initialized','params':{}})
+        send({'jsonrpc':'2.0','id':2,'method':'tools/call',
+              'params':{'name':'consultar_banco','arguments':{'query':sql}}})
+        resp = recv(2, deadline)
+        if 'error' in resp:
+            raise RuntimeError(f'Sapron error: {resp["error"]}')
+        content = resp['result']['content']
+        # content: lista de blocos {type, text}
+        text = ''.join(b.get('text','') for b in content if b.get('type')=='text')
+        return json.loads(text)
+    finally:
+        try: proc.stdin.close()
+        except Exception: pass
+        try: proc.terminate()
+        except Exception: pass
+
+
+def main():
+    ids_file = BASE / 'sapron_ids.txt'
+    ids = [int(x) for x in ids_file.read_text(encoding='utf-8').split() if x.strip()]
+    sql = build_sql(ids)
+    rows = call_sapron(sql)
+    (BASE / 'sapron_result.json').write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f'OK: {len(rows)} rows do Sapron')
+
+
+if __name__ == '__main__':
+    main()
