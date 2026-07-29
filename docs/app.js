@@ -246,7 +246,25 @@ document.querySelectorAll('.tab-btns button').forEach(b => b.addEventListener('c
 }));
 $('btn-refresh').addEventListener('click', () => loadAll().then(()=> toast('Dados recarregados')));
 
+// debounce pra evitar refetch em rajada quando o Python faz upsert de várias linhas
+let cardsRefetchTimer = null;
+function scheduleCardsRefetch(){
+  clearTimeout(cardsRefetchTimer);
+  cardsRefetchTimer = setTimeout(async () => {
+    await loadAll();
+    toast('Painel atualizado com dados novos do Sapron');
+  }, 1500);
+}
+
 function subscribeRealtime(){
+  // Cards e activities atualizados pelo refresh Python → recarrega tudo
+  sb.channel('pipefy-cards')
+    .on('postgres_changes', { event:'*', schema:'public', table:'pipefy_cards' }, () => scheduleCardsRefetch())
+    .subscribe();
+  sb.channel('pipefy-activities')
+    .on('postgres_changes', { event:'*', schema:'public', table:'pipefy_activities' }, () => scheduleCardsRefetch())
+    .subscribe();
+
   sb.channel('pipefy-checks')
     .on('postgres_changes', { event:'*', schema:'public', table:'pipefy_checks' }, payload => {
       const row = payload.new || payload.old;
