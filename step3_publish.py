@@ -58,16 +58,27 @@ def build_rows():
     cards = json.loads(CARDS_JSON.read_text(encoding='utf-8'))
     sap = json.loads(SAPRON_JSON.read_text(encoding='utf-8'))
 
-    # index activities por property_id
+    # index activities por property_id (para os que TÊM property_id vinculado)
     by_prop = defaultdict(list)
     for r in sap:
-        by_prop[str(r['property_id'])].append(r)
+        pid = r.get('property_id')
+        if pid: by_prop[str(pid)].append(r)
 
-    # contagem de activities em 'andamento' por property_id
+    # index por código do título — fallback quando property_id é null ou não bate
+    by_code = defaultdict(list)
+    for r in sap:
+        code = extract_codigo_from_title(r.get('activity_title'))
+        if code: by_code[code].append(r)
+
+    # contagem de activities em 'andamento' por property_id E por código
     andamento_by_prop = defaultdict(int)
+    andamento_by_code = defaultdict(int)
     for r in sap:
         if (r.get('activity_status') or '').lower() == 'andamento':
-            andamento_by_prop[str(r['property_id'])] += 1
+            pid = r.get('property_id')
+            if pid: andamento_by_prop[str(pid)] += 1
+            code = extract_codigo_from_title(r.get('activity_title'))
+            if code: andamento_by_code[code] += 1
 
     # códigos já cobertos pelo Pipefy (pra não duplicar)
     pipefy_property_ids = set()
@@ -88,7 +99,20 @@ def build_rows():
         responsavel = c.get('responsavel_pipefy') or ''
         data_ag = c.get('data_agendada') or ''
         fase = c.get('phase_name') or ''
-        card_acts = by_prop.get(pid, [])
+
+        # 1º tenta cruzamento por property_id; 2º fallback por código no título
+        card_acts = list(by_prop.get(pid, [])) if pid else []
+        if not card_acts and codigo:
+            # activities cujo title começa com o código — dedup por activity_id
+            seen_ids = set()
+            for a in by_code.get(codigo, []):
+                aid = a.get('activity_id')
+                if aid in seen_ids: continue
+                seen_ids.add(aid)
+                card_acts.append(a)
+
+        # contagem de "andamento" pra este card (pela via que deu match)
+        cham_and = andamento_by_prop.get(pid, 0) if pid and by_prop.get(pid) else andamento_by_code.get(codigo, 0)
 
         if not card_acts:
             rows.append({
@@ -97,7 +121,7 @@ def build_rows():
                 'categoria': 'sem_activity', 'acao': 'Sem chamado no Sapron',
                 'quem': '', 'quando': '', 'ultima_msg_ts': 0,
                 'abertos': 0, 'total': 0,
-                'origem': 'pipefy', 'chamados_andamento': andamento_by_prop.get(pid, 0),
+                'origem': 'pipefy', 'chamados_andamento': cham_and,
             })
             continue
 
@@ -127,7 +151,7 @@ def build_rows():
                            in ('aberto','andamento','aguardando')),
             'total': len(card_acts),
             'origem': 'pipefy',
-            'chamados_andamento': andamento_by_prop.get(pid, 0),
+            'chamados_andamento': cham_and,
         })
 
         for a in card_acts_sorted:

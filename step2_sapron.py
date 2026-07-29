@@ -24,11 +24,16 @@ def build_sql(ids):
     # Truque: o MCP do Sapron bloqueia a palavra 'deleted_at' literal
     # na SQL. Concateno em runtime pra passar pelo filtro de segurança.
     NOT_DEL = "(to_jsonb(a)->>('dele'||'ted_at')) IS NULL"
+    # Pega qualquer chamado ABERTO (andamento/aguardando/aberto), independente do property_id,
+    # + os da Fase 3 (por property_id) mesmo se resolvidos. O cruzamento por título fica no step3.
     return f"""WITH filtro AS (
   SELECT a.id FROM franchise_communication_activity a
   WHERE a.category = 'implantacao'
     AND {NOT_DEL}
-    AND (a.property_id IN ({ids_sql}) OR a.status = 'andamento')
+    AND (
+      a.property_id IN ({ids_sql})
+      OR a.status IN ('andamento','aguardando','aberto')
+    )
 ),
 last_msg AS (
   SELECT DISTINCT ON (m.activity_id)
