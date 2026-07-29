@@ -116,6 +116,8 @@ function render(){
     let show = true;
     if(FILTRO==='pendentes' && isOK) show=false;
     if(['sem_activity','nossa_vez','sem_msg','esperando'].includes(FILTRO) && r.categoria!==FILTRO) show=false;
+    if(FILTRO==='duplicados' && (r.chamados_andamento||0) <= 1) show=false;
+    if(FILTRO==='sapron_only' && r.origem !== 'sapron_only') show=false;
     if(BUSCA){
       const hay = (r.codigo+' '+r.acao+' '+r.quem+' '+r.responsavel+' '+(note?.content||'')).toLowerCase();
       if(!hay.includes(BUSCA)) show=false;
@@ -123,15 +125,29 @@ function render(){
     if(!show) continue;
     visible++;
 
+    const isDup = (r.chamados_andamento||0) > 1;
+    const isSapronOnly = r.origem === 'sapron_only';
+
     const tr = document.createElement('tr');
-    tr.className = isOK ? 'done' : r.categoria;
+    tr.className = [
+      isOK ? 'done' : r.categoria,
+      isDup ? 'dup' : '',
+      isSapronOnly ? 'sapron_only' : '',
+    ].filter(Boolean).join(' ');
+
     const checkedBy = isOK
       ? `<span class="checked-by">✔ ${escapeHtml(chk.user_name || chk.user_email.split('@')[0])}</span>`
+      : '';
+    const dupBadge = isDup
+      ? `<span class="badge-dup" title="${r.chamados_andamento} chamados em andamento">⚠ ${r.chamados_andamento}×</span>`
+      : '';
+    const foraBadge = isSapronOnly
+      ? `<span class="badge-fora" title="Fora da Fase 3 do Pipefy">◆ fora</span>`
       : '';
     tr.innerHTML =
       `<td class="c">${visible}</td>`+
       `<td class="c"><input type="checkbox" class="chk" data-k="${escapeHtml(r.card_id)}" ${isOK?'checked':''}></td>`+
-      `<td><span class="codigo">${escapeHtml(r.codigo)}</span>${checkedBy}</td>`+
+      `<td><span class="codigo">${escapeHtml(r.codigo)}</span>${dupBadge}${foraBadge}${checkedBy}</td>`+
       `<td>${escapeHtml(r.acao)}</td>`+
       `<td>${escapeHtml(r.quem)}</td>`+
       `<td>${escapeHtml(r.quando)}</td>`+

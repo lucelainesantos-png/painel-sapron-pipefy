@@ -53,6 +53,11 @@ tbody tr.sem_activity{background:var(--red)}
 tbody tr.sem_msg{background:var(--grey)}
 tbody tr.done{background:var(--yellow) !important;color:var(--yellow-txt);text-decoration:line-through}
 tbody tr.done .codigo{color:var(--yellow-txt)}
+tbody tr.dup{border-left:4px solid #7030A0}
+tbody tr.dup td:first-child{border-left:none}
+tbody tr.sapron_only td:first-child::before{content:"◆";color:#7030A0;margin-right:4px;font-size:10px}
+.badge-dup{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:10px;background:#7030A0;color:#fff;font-size:10px;font-weight:700;letter-spacing:.3px}
+.badge-fora{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:8px;background:#EFE1F5;color:#7030A0;font-size:10px;font-weight:700}
 .codigo{font-weight:700;color:var(--navy)}
 .badge-abertos{display:inline-block;min-width:22px;padding:2px 8px;border-radius:12px;background:#fff;font-weight:700;font-size:12px;color:var(--txt)}
 .badge-abertos.hot{background:var(--red-dk);color:#fff}
@@ -132,6 +137,8 @@ textarea.obs{width:100%;min-width:160px;border:1px solid var(--border);border-ra
   <span class="chip" data-filter="nossa_vez">🟢 Nossa vez</span>
   <span class="chip" data-filter="sem_msg">⚪ Sem mensagens</span>
   <span class="chip" data-filter="esperando">🟠 Esperando franquia</span>
+  <span class="chip" data-filter="duplicados">🟣 Duplicados</span>
+  <span class="chip" data-filter="sapron_only">◆ Fora da Fase 3</span>
   <span class="spacer"></span>
   <button id="btn-refresh" title="Recarregar dados agora">↻ Recarregar</button>
 </div>

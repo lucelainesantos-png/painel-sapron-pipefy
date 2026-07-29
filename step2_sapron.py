@@ -14,13 +14,23 @@ CF_ID = '3b5850913f6773cc3a67b87dd1061d6c.access'
 CF_SECRET = 'ac229ad8c0024eb49b722016cc4f3fd2425576cdbc2e43ea3d9be230ef5b1060'
 
 def build_sql(ids):
+    """
+    Pega tudo que interessa pro painel:
+    - Activities de implantacao dos imóveis da Fase 3 (property_ids passados)
+    - +  TODAS as activities implantacao em 'andamento' (mesmo fora da Fase 3)
+    Assim conseguimos mesclar no painel: cards da Fase 3 + "avulsos" só do Sapron.
+    """
     ids_sql = ','.join(str(i) for i in ids)
-    return f"""WITH last_msg AS (
+    return f"""WITH filtro AS (
+  SELECT id FROM franchise_communication_activity
+  WHERE category = 'implantacao'
+    AND (property_id IN ({ids_sql}) OR status = 'andamento')
+),
+last_msg AS (
   SELECT DISTINCT ON (m.activity_id)
          m.activity_id, m.author_id, m.created_at AS ultima_msg_at
   FROM franchise_communication_activitymessage m
-  JOIN franchise_communication_activity a ON a.id = m.activity_id
-  WHERE a.property_id IN ({ids_sql}) AND a.category = 'implantacao'
+  JOIN filtro f ON f.id = m.activity_id
   ORDER BY m.activity_id, m.created_at DESC
 )
 SELECT a.id AS activity_id,
@@ -31,9 +41,9 @@ SELECT a.id AS activity_id,
        u.email AS ultimo_autor_email,
        u.first_name || ' ' || u.last_name AS ultimo_autor_nome
 FROM franchise_communication_activity a
+JOIN filtro f ON f.id = a.id
 LEFT JOIN last_msg lm ON lm.activity_id = a.id
 LEFT JOIN account_user u ON u.id = lm.author_id
-WHERE a.property_id IN ({ids_sql}) AND a.category = 'implantacao'
 ORDER BY a.property_id, a.id;"""
 
 
