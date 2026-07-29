@@ -102,6 +102,19 @@ async function loadAll(){
 
 function fatal(what, err){ console.error(what, err); toast('Erro ao carregar '+what+': '+err.message, 8000); }
 
+const SAPRON_ACTIVITY_URL = id => `https://sapron.com.br/central-atividades/a/${id}`;
+
+// Ativity mais recente por card (pra usar como link primário)
+function primaryActivity(card_id){
+  let best = null, bestTs = -1;
+  for(const a of ACTS){
+    if(a.card_id !== card_id) continue;
+    const ts = a.ultima_ts || 0;
+    if(ts > bestTs || best === null){ best = a; bestTs = ts; }
+  }
+  return best;
+}
+
 function render(){
   const tbody = $('tbody'); tbody.innerHTML = '';
   let visible=0, ok=0, pend=0, nossa=0, esp=0;
@@ -139,10 +152,14 @@ function render(){
     const foraBadge = isSapronOnly
       ? `<span class="badge-fora" title="Fora da Fase 3 do Pipefy">◆ fora</span>`
       : '';
+    const primaryAct = primaryActivity(r.card_id);
+    const codigoHtml = primaryAct && primaryAct.activity_id
+      ? `<a class="codigo codigo-link" href="${SAPRON_ACTIVITY_URL(primaryAct.activity_id)}" target="_blank" rel="noopener" title="Abrir chamado no Sapron">${escapeHtml(r.codigo)}</a>`
+      : `<span class="codigo">${escapeHtml(r.codigo)}</span>`;
     tr.innerHTML =
       `<td class="c">${visible}</td>`+
       `<td class="c"><input type="checkbox" class="chk" data-k="${escapeHtml(r.card_id)}" ${isOK?'checked':''}></td>`+
-      `<td><span class="codigo">${escapeHtml(r.codigo)}</span>${foraBadge}${checkedBy}</td>`+
+      `<td>${codigoHtml}${foraBadge}${checkedBy}</td>`+
       `<td>${escapeHtml(r.acao)}</td>`+
       `<td>${escapeHtml(r.quem)}</td>`+
       `<td>${escapeHtml(r.quando)}</td>`+
@@ -180,9 +197,12 @@ function renderDetalhes(){
     if(q && !hay.includes(q)) continue;
     const tr = document.createElement('tr');
     tr.className = d.cat;
+    const actLink = d.activity_id
+      ? `<a href="${SAPRON_ACTIVITY_URL(d.activity_id)}" target="_blank" rel="noopener" title="Abrir chamado no Sapron">${escapeHtml(d.activity_id)}</a>`
+      : '';
     tr.innerHTML =
       `<td><span class="codigo">${escapeHtml(d.codigo)}</span></td>`+
-      `<td>${escapeHtml(d.activity_id)}</td>`+
+      `<td>${actLink}</td>`+
       `<td>${escapeHtml(d.titulo)}</td>`+
       `<td>${escapeHtml(d.status)}</td>`+
       `<td>${escapeHtml(d.ultima)}</td>`+
