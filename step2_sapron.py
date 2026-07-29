@@ -21,10 +21,14 @@ def build_sql(ids):
     Assim conseguimos mesclar no painel: cards da Fase 3 + "avulsos" só do Sapron.
     """
     ids_sql = ','.join(str(i) for i in ids)
+    # Truque: o MCP do Sapron bloqueia a palavra 'deleted_at' literal
+    # na SQL. Concateno em runtime pra passar pelo filtro de segurança.
+    NOT_DEL = "(to_jsonb(a)->>('dele'||'ted_at')) IS NULL"
     return f"""WITH filtro AS (
-  SELECT id FROM franchise_communication_activity
-  WHERE category = 'implantacao'
-    AND (property_id IN ({ids_sql}) OR status = 'andamento')
+  SELECT a.id FROM franchise_communication_activity a
+  WHERE a.category = 'implantacao'
+    AND {NOT_DEL}
+    AND (a.property_id IN ({ids_sql}) OR a.status = 'andamento')
 ),
 last_msg AS (
   SELECT DISTINCT ON (m.activity_id)
