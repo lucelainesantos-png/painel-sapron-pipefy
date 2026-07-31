@@ -26,6 +26,7 @@ def build_sql(ids):
     NOT_DEL = "(to_jsonb(a)->>('dele'||'ted_at')) IS NULL"
     # Pega qualquer chamado ABERTO (andamento/aguardando/aberto), independente do property_id,
     # + os da Fase 3 (por property_id) mesmo se resolvidos. O cruzamento por título fica no step3.
+    # Traz também info sobre reação do time à última msg (pra auto-check).
     return f"""WITH filtro AS (
   SELECT a.id FROM franchise_communication_activity a
   WHERE a.category = 'implantacao'
@@ -37,10 +38,23 @@ def build_sql(ids):
 ),
 last_msg AS (
   SELECT DISTINCT ON (m.activity_id)
-         m.activity_id, m.author_id, m.created_at AS ultima_msg_at
+         m.activity_id, m.id AS message_id, m.author_id, m.created_at AS ultima_msg_at
   FROM franchise_communication_activitymessage m
   JOIN filtro f ON f.id = m.activity_id
   ORDER BY m.activity_id, m.created_at DESC
+),
+seazone_reacao AS (
+  SELECT DISTINCT ON (lm.activity_id)
+         lm.activity_id,
+         u2.email  AS reactor_email,
+         u2.first_name || ' ' || u2.last_name AS reactor_nome,
+         r.created_at AS reacao_em,
+         r.emoji
+  FROM last_msg lm
+  JOIN franchise_communication_activitymessagereaction r ON r.message_id = lm.message_id
+  JOIN account_user u2 ON u2.id = r.user_id
+  WHERE u2.email ILIKE '%@seazone.com.br'
+  ORDER BY lm.activity_id, r.created_at DESC
 )
 SELECT a.id AS activity_id,
        a.property_id,
@@ -48,11 +62,16 @@ SELECT a.id AS activity_id,
        a.status AS activity_status,
        lm.ultima_msg_at,
        u.email AS ultimo_autor_email,
-       u.first_name || ' ' || u.last_name AS ultimo_autor_nome
+       u.first_name || ' ' || u.last_name AS ultimo_autor_nome,
+       sr.reactor_email  AS time_reactor_email,
+       sr.reactor_nome   AS time_reactor_nome,
+       sr.reacao_em      AS time_reacao_em,
+       sr.emoji          AS time_reacao_emoji
 FROM franchise_communication_activity a
 JOIN filtro f ON f.id = a.id
 LEFT JOIN last_msg lm ON lm.activity_id = a.id
 LEFT JOIN account_user u ON u.id = lm.author_id
+LEFT JOIN seazone_reacao sr ON sr.activity_id = a.id
 ORDER BY a.property_id, a.id;"""
 
 

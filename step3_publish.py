@@ -44,6 +44,28 @@ def ts_ms(dt):
 CODE_RE = re.compile(r'^\s*([A-Z]{2,6}\d{3,5})', re.IGNORECASE)
 
 
+def _maybe_auto_check(bucket, card_id, act, categoria, dt0):
+    """Decide se um card deve receber auto-check e adiciona ao bucket."""
+    # Caso 1: time já respondeu (categoria=esperando) → nossa parte tá feita.
+    if categoria == 'esperando':
+        bucket.append({
+            'card_id': card_id,
+            'user_email': (act.get('ultimo_autor_email') or 'auto-check@seazone.com.br'),
+            'user_name': (act.get('ultimo_autor_nome') or 'auto-check').strip() + ' (auto)',
+            'checked_at': dt0.isoformat() if dt0 else datetime.now().isoformat(),
+        })
+        return
+    # Caso 2: última msg foi da franquia MAS alguém do time reagiu com emoji.
+    if categoria == 'nossa_vez' and act.get('time_reactor_email'):
+        reacao_dt = parse_dt(act.get('time_reacao_em'))
+        bucket.append({
+            'card_id': card_id,
+            'user_email': act.get('time_reactor_email'),
+            'user_name': (act.get('time_reactor_nome') or 'auto-check').strip() + f' ({act.get("time_reacao_emoji","")} auto)',
+            'checked_at': (reacao_dt.isoformat() if reacao_dt else datetime.now().isoformat()),
+        })
+
+
 def extract_codigo_from_title(title):
     """Do title 'VIL0023 - Implantação novo imóvel' extrai 'VIL0023'."""
     if not title: return ''
@@ -90,6 +112,7 @@ def build_rows():
         if cod: pipefy_codigos.add(cod)
 
     rows, acts = [], []
+    auto_checks = []   # cards a marcar como OK automaticamente
 
     # =========== 1) cards do Pipefy Fase 3 ===========
     for c in cards:
@@ -153,6 +176,8 @@ def build_rows():
             'origem': 'pipefy',
             'chamados_andamento': cham_and,
         })
+        # === auto-check ===
+        _maybe_auto_check(auto_checks, card_id, a0, cat, dt0)
 
         for a in card_acts_sorted:
             dta = parse_dt(a.get('ultima_msg_at'))
@@ -218,6 +243,7 @@ def build_rows():
             'origem': 'sapron_only',
             'chamados_andamento': andamento_by_prop.get(pid, 0),
         })
+        _maybe_auto_check(auto_checks, f'sapron_{pid}', a0, cat, dt0)
 
         for a in act_list_sorted:
             dta = parse_dt(a.get('ultima_msg_at'))
@@ -248,7 +274,7 @@ def build_rows():
     rows.sort(key=sort_key)
     for i, r in enumerate(rows):
         r['order_idx'] = i
-    return rows, acts
+    return rows, acts, auto_checks
 
 
 def rpc(fn, payload):
@@ -273,8 +299,8 @@ def chunked(seq, n):
 
 
 def main():
-    rows, acts = build_rows()
-    print(f'Preparado: {len(rows)} cards, {len(acts)} activities')
+    rows, acts, auto_checks = build_rows()
+    print(f'Preparado: {len(rows)} cards, {len(acts)} activities, {len(auto_checks)} auto-checks candidatos')
 
     total = 0
     for batch in chunked(rows, 200):
@@ -294,6 +320,12 @@ def main():
         'keep_activities': keep_acts,
     })
     print(f'  prune: {prune}')
+
+    # auto-checks — só INSERE (não sobrescreve check manual)
+    total_auto = 0
+    for batch in chunked(auto_checks, 300):
+        total_auto += rpc('pipefy_auto_check', {'secret': SUPABASE_REFRESH_SECRET, 'checks': batch})
+    print(f'  auto-checks inseridos: {total_auto} (de {len(auto_checks)} candidatos; conflitos ignorados)')
 
     from collections import Counter
     c = Counter(r['categoria'] for r in rows)
