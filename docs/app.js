@@ -131,6 +131,7 @@ function render(){
     if(['sem_activity','nossa_vez','sem_msg','esperando'].includes(FILTRO) && r.categoria!==FILTRO) show=false;
     if(FILTRO==='duplicados' && (r.chamados_andamento||0) <= 1) show=false;
     if(FILTRO==='sapron_only' && r.origem !== 'sapron_only') show=false;
+    if(FILTRO==='fase3' && r.origem !== 'pipefy') show=false;
     if(BUSCA){
       const hay = (r.codigo+' '+r.acao+' '+r.quem+' '+r.responsavel+' '+(note?.content||'')).toLowerCase();
       if(!hay.includes(BUSCA)) show=false;
@@ -152,6 +153,9 @@ function render(){
     const foraBadge = isSapronOnly
       ? `<span class="badge-fora" title="Fora da Fase 3 do Pipefy">◆ fora</span>`
       : '';
+    const fase3Badge = r.origem === 'pipefy'
+      ? `<span class="badge-fase3" title="Card da Fase 3 - Vistoria Inicial do PIPE 1">Fase 3</span>`
+      : '';
     const primaryAct = primaryActivity(r.card_id);
     const codigoHtml = primaryAct && primaryAct.activity_id
       ? `<a class="codigo codigo-link" href="${SAPRON_ACTIVITY_URL(primaryAct.activity_id)}" target="_blank" rel="noopener" title="Abrir chamado no Sapron">${escapeHtml(r.codigo)}</a>`
@@ -159,7 +163,7 @@ function render(){
     tr.innerHTML =
       `<td class="c">${visible}</td>`+
       `<td class="c"><input type="checkbox" class="chk" data-k="${escapeHtml(r.card_id)}" ${isOK?'checked':''}></td>`+
-      `<td>${codigoHtml}${foraBadge}${checkedBy}</td>`+
+      `<td>${codigoHtml}${fase3Badge}${foraBadge}${checkedBy}</td>`+
       `<td>${escapeHtml(r.acao)}</td>`+
       `<td>${escapeHtml(r.quem)}</td>`+
       `<td>${escapeHtml(r.quando)}</td>`+
