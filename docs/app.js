@@ -287,6 +287,19 @@ function subscribeRealtime(){
   sb.channel('pipefy-activities')
     .on('postgres_changes', { event:'*', schema:'public', table:'pipefy_activities' }, () => scheduleCardsRefetch())
     .subscribe();
+  // Meta (timestamp do último refresh) — dispara mesmo quando nada mudou nos dados
+  sb.channel('pipefy-meta')
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'pipefy_meta' }, () => scheduleCardsRefetch())
+    .subscribe();
+
+  // Safety net — a cada 90s pega meta pra detectar se realtime caiu
+  setInterval(async () => {
+    const { data } = await sb.from('pipefy_meta').select('*').eq('id', 1).single();
+    if(!data || !META) return;
+    if(new Date(data.last_refresh).getTime() > new Date(META.last_refresh).getTime()){
+      scheduleCardsRefetch();
+    }
+  }, 90 * 1000);
 
   sb.channel('pipefy-checks')
     .on('postgres_changes', { event:'*', schema:'public', table:'pipefy_checks' }, payload => {
