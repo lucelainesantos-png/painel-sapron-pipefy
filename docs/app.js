@@ -118,7 +118,11 @@ function primaryActivity(card_id){
 function render(){
   const tbody = $('tbody'); tbody.innerHTML = '';
   let visible=0, ok=0, pend=0, nossa=0, esp=0;
-  for(const r of CARDS){
+  // Quando o filtro é "Fase 3", ordena por conversa mais antiga primeiro (nulos vão na frente).
+  const iter = (FILTRO === 'fase3')
+    ? [...CARDS].sort((a,b) => (a.ultima_msg_ts||0) - (b.ultima_msg_ts||0))
+    : CARDS;
+  for(const r of iter){
     const chk = CHECKS.get(r.card_id);
     const note = NOTES.get(r.card_id);
     const isOK = !!chk;
