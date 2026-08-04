@@ -275,7 +275,6 @@ function scheduleCardsRefetch(){
   clearTimeout(cardsRefetchTimer);
   cardsRefetchTimer = setTimeout(async () => {
     await loadAll();
-    toast('Painel atualizado com dados novos do Sapron');
   }, 1500);
 }
 
